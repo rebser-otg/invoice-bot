@@ -1,0 +1,3 @@
+# One sender email per line. Lines starting with # are ignored.
+billing@anthropic.com
+invoices@openai.com
