@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rebser-otg/invoice-bot/config"
@@ -66,5 +67,33 @@ func TestLoad_MissingMessage(t *testing.T) {
 	_, err := config.Load(dir)
 	if err == nil {
 		t.Fatal("expected error for missing message.txt")
+	}
+}
+
+func TestLoad_EmptyForwardTo(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "config.yaml", "forward_to: \"\"\n")
+	writeFile(t, dir, "senders.txt", "billing@anthropic.com\n")
+	writeFile(t, dir, "message.txt", "msg\n")
+	_, err := config.Load(dir)
+	if err == nil {
+		t.Fatal("expected error for empty forward_to")
+	}
+	if !strings.Contains(err.Error(), "forward_to") {
+		t.Errorf("error should mention forward_to, got: %v", err)
+	}
+}
+
+func TestLoad_EmptySenders(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "config.yaml", "forward_to: test@example.com\n")
+	writeFile(t, dir, "senders.txt", "# only comments\n\n")
+	writeFile(t, dir, "message.txt", "msg\n")
+	_, err := config.Load(dir)
+	if err == nil {
+		t.Fatal("expected error for empty senders list")
+	}
+	if !strings.Contains(err.Error(), "sender") {
+		t.Errorf("error should mention sender, got: %v", err)
 	}
 }

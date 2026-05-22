@@ -31,6 +31,12 @@ func Load(dir string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("senders.txt: %w", err)
 	}
+	if yc.ForwardTo == "" {
+		return nil, fmt.Errorf("config.yaml: forward_to is required")
+	}
+	if len(senders) == 0 {
+		return nil, fmt.Errorf("senders.txt: at least one sender address is required")
+	}
 	msg, err := os.ReadFile(filepath.Join(dir, "message.txt"))
 	if err != nil {
 		return nil, fmt.Errorf("message.txt: %w", err)
