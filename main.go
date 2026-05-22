@@ -29,13 +29,17 @@ func main() {
 		fatalf("connecting to Gmail:\n%v", err)
 	}
 
-	result, err := forwarder.Run(cfg, mem, client)
-	if err != nil {
-		fatalf("running forwarder: %v", err)
-	}
+	result, runErr := forwarder.Run(cfg, mem, client)
 
+	// Save memory before checking runErr: if Run failed mid-loop some messages
+	// may already have been forwarded and added to mem — persisting them prevents
+	// duplicate sends on the next run.
 	if err := mem.Save(memPath); err != nil {
 		fatalf("saving memory: %v", err)
+	}
+
+	if runErr != nil {
+		fatalf("running forwarder: %v", runErr)
 	}
 
 	if result.Forwarded == 0 && result.Failed == 0 {
