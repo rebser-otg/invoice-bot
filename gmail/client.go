@@ -2,10 +2,12 @@ package gmail
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -97,4 +99,52 @@ func runBrowserFlow(cfg *oauth2.Config) (*oauth2.Token, error) {
 		return nil, fmt.Errorf("exchanging code: %w", err)
 	}
 	return tok, nil
+}
+
+// BuildQuery constructs a Gmail search query matching any of the given sender addresses.
+func BuildQuery(senders []string) string {
+	return "from:(" + strings.Join(senders, " OR ") + ")"
+}
+
+// Search returns all Gmail message IDs matching the configured senders.
+// Handles pagination automatically.
+func (c *Client) Search(senders []string) ([]string, error) {
+	query := BuildQuery(senders)
+	var ids []string
+	pageToken := ""
+	for {
+		call := c.svc.Users.Messages.List("me").Q(query)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		r, err := call.Do()
+		if err != nil {
+			return nil, fmt.Errorf("gmail search: %w", err)
+		}
+		for _, m := range r.Messages {
+			ids = append(ids, m.Id)
+		}
+		if r.NextPageToken == "" {
+			break
+		}
+		pageToken = r.NextPageToken
+	}
+	return ids, nil
+}
+
+// FetchRaw retrieves the raw RFC 2822 bytes for the given Gmail message ID.
+func (c *Client) FetchRaw(id string) ([]byte, error) {
+	msg, err := c.svc.Users.Messages.Get("me", id).Format("raw").Do()
+	if err != nil {
+		return nil, fmt.Errorf("fetching message %s: %w", id, err)
+	}
+	// Gmail uses base64url; try with padding first, then without.
+	raw, err := base64.URLEncoding.DecodeString(msg.Raw)
+	if err != nil {
+		raw, err = base64.RawURLEncoding.DecodeString(msg.Raw)
+		if err != nil {
+			return nil, fmt.Errorf("decoding message %s: %w", id, err)
+		}
+	}
+	return raw, nil
 }

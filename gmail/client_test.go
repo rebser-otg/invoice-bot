@@ -21,3 +21,19 @@ func TestNewClient_MissingCredentials(t *testing.T) {
 		t.Errorf("error should contain actionable URL, got: %v", err)
 	}
 }
+
+func TestBuildQuery_Multiple(t *testing.T) {
+	got := gmail.BuildQuery([]string{"a@example.com", "b@example.com"})
+	want := "from:(a@example.com OR b@example.com)"
+	if got != want {
+		t.Errorf("BuildQuery = %q, want %q", got, want)
+	}
+}
+
+func TestBuildQuery_Single(t *testing.T) {
+	got := gmail.BuildQuery([]string{"a@example.com"})
+	want := "from:(a@example.com)"
+	if got != want {
+		t.Errorf("BuildQuery = %q, want %q", got, want)
+	}
+}
