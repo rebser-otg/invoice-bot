@@ -102,7 +102,11 @@ func runBrowserFlow(cfg *oauth2.Config) (*oauth2.Token, error) {
 }
 
 // BuildQuery constructs a Gmail search query matching any of the given sender addresses.
+// Returns an empty string if senders is empty.
 func BuildQuery(senders []string) string {
+	if len(senders) == 0 {
+		return ""
+	}
 	return "from:(" + strings.Join(senders, " OR ") + ")"
 }
 
@@ -138,10 +142,10 @@ func (c *Client) FetchRaw(id string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching message %s: %w", id, err)
 	}
-	// Gmail uses base64url; try with padding first, then without.
-	raw, err := base64.URLEncoding.DecodeString(msg.Raw)
+	// Gmail returns unpadded base64url (RFC 4648 §5); fall back to padded just in case.
+	raw, err := base64.RawURLEncoding.DecodeString(msg.Raw)
 	if err != nil {
-		raw, err = base64.RawURLEncoding.DecodeString(msg.Raw)
+		raw, err = base64.URLEncoding.DecodeString(msg.Raw)
 		if err != nil {
 			return nil, fmt.Errorf("decoding message %s: %w", id, err)
 		}
