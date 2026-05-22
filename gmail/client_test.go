@@ -37,3 +37,12 @@ func TestBuildQuery_Single(t *testing.T) {
 		t.Errorf("BuildQuery = %q, want %q", got, want)
 	}
 }
+
+// TestClient_ImplementsMailClient verifies Client satisfies the forwarder.MailClient interface at compile time.
+func TestClient_ImplementsMailClient(t *testing.T) {
+	var _ interface {
+		Search([]string) ([]string, error)
+		FetchRaw(string) ([]byte, error)
+		Send([]byte) error
+	} = (*gmail.Client)(nil)
+}

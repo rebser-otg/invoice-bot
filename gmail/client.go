@@ -136,6 +136,17 @@ func (c *Client) Search(senders []string) ([]string, error) {
 	return ids, nil
 }
 
+// Send encodes raw RFC 2822 bytes as base64url and sends them via the Gmail API.
+func (c *Client) Send(raw []byte) error {
+	encoded := base64.URLEncoding.EncodeToString(raw)
+	msg := &gmailv1.Message{Raw: encoded}
+	_, err := c.svc.Users.Messages.Send("me", msg).Do()
+	if err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+	return nil
+}
+
 // FetchRaw retrieves the raw RFC 2822 bytes for the given Gmail message ID.
 func (c *Client) FetchRaw(id string) ([]byte, error) {
 	msg, err := c.svc.Users.Messages.Get("me", id).Format("raw").Do()
