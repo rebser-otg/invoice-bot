@@ -14,11 +14,6 @@ A CLI tool that scans your Gmail for invoices from Anthropic and OpenAI and forw
    - Name: `invoice-bot` (or anything)
    - Click Create, then **Download JSON**
 5. Save the downloaded file as `credentials.json` in the project root
-6. Open the credential you just created, scroll to **Authorized redirect URIs**, and add:
-   ```
-   http://127.0.0.1
-   ```
-   (Google matches any port on this host, which is what the tool uses for its local callback server)
 
 ### 2. Configure
 
