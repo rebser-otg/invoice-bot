@@ -29,14 +29,11 @@ func BuildForward(rawOriginal []byte, forwardTo, messageText string) ([]byte, er
 		subject = "Fwd: " + subject
 	}
 
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-
-	// Write outer headers before any multipart boundary
-	fmt.Fprintf(&buf, "To: %s\r\n", forwardTo)
-	fmt.Fprintf(&buf, "Subject: %s\r\n", subject)
-	fmt.Fprintf(&buf, "MIME-Version: 1.0\r\n")
-	fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n", w.Boundary())
+	// Build multipart body in a separate buffer so outer headers can be
+	// written before the boundary — this avoids relying on multipart.NewWriter
+	// writing nothing at construction time.
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
 
 	// Part 1: the message.txt preamble
 	hdr1 := textproto.MIMEHeader{}
@@ -58,9 +55,16 @@ func BuildForward(rawOriginal []byte, forwardTo, messageText string) ([]byte, er
 	if _, err := p2.Write(rawOriginal); err != nil {
 		return nil, fmt.Errorf("writing original message: %w", err)
 	}
-
 	if err := w.Close(); err != nil {
 		return nil, fmt.Errorf("closing multipart writer: %w", err)
 	}
-	return buf.Bytes(), nil
+
+	// Assemble: outer headers first, then body
+	var out bytes.Buffer
+	fmt.Fprintf(&out, "To: %s\r\n", forwardTo)
+	fmt.Fprintf(&out, "Subject: %s\r\n", subject)
+	fmt.Fprintf(&out, "MIME-Version: 1.0\r\n")
+	fmt.Fprintf(&out, "Content-Type: multipart/mixed; boundary=%s\r\n\r\n", w.Boundary())
+	out.Write(body.Bytes())
+	return out.Bytes(), nil
 }
