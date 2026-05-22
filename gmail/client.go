@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -86,19 +89,72 @@ func saveToken(path string, tok *oauth2.Token) error {
 	return os.WriteFile(path, data, 0600)
 }
 
+// runBrowserFlow starts a local HTTP server on a random port, opens the OAuth
+// consent URL in the user's browser, waits for the redirect callback, and
+// exchanges the received code for a token.
 func runBrowserFlow(cfg *oauth2.Config) (*oauth2.Token, error) {
-	cfg.RedirectURL = "urn:ietf:wg:oauth:2.0:oob"
-	authURL := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Open this URL in your browser to authorize invoice-bot:\n\n%s\n\nEnter the authorization code: ", authURL)
-	var code string
-	if _, err := fmt.Scan(&code); err != nil {
-		return nil, fmt.Errorf("reading auth code: %w", err)
+	// Bind to a random free port on loopback.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("starting local server: %w", err)
 	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	redirectURL := fmt.Sprintf("http://127.0.0.1:%d/oauth/callback", port)
+	cfg.RedirectURL = redirectURL
+
+	codeCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+
+	mux := http.NewServeMux()
+	srv := &http.Server{Handler: mux}
+	mux.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			errCh <- fmt.Errorf("no code in callback: %s", r.URL.RawQuery)
+			http.Error(w, "Authorization failed — no code received.", http.StatusBadRequest)
+			return
+		}
+		fmt.Fprintln(w, "<html><body><p>Authorization successful — you can close this tab.</p></body></html>")
+		codeCh <- code
+	})
+
+	go func() {
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+	defer srv.Close()
+
+	authURL := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	fmt.Printf("Opening browser for Gmail authorization...\n%s\n\n(Waiting for redirect on %s)\n", authURL, redirectURL)
+
+	// Best-effort browser open; user can always paste the URL manually.
+	_ = openBrowser(authURL)
+
+	var code string
+	select {
+	case code = <-codeCh:
+	case err = <-errCh:
+		return nil, fmt.Errorf("OAuth callback: %w", err)
+	}
+
 	tok, err := cfg.Exchange(context.Background(), code)
 	if err != nil {
 		return nil, fmt.Errorf("exchanging code: %w", err)
 	}
 	return tok, nil
+}
+
+// openBrowser attempts to open url in the default browser. Errors are ignored
+// because the user can always paste the URL manually.
+func openBrowser(url string) error {
+	// Try common Linux launchers, then macOS, then Windows.
+	for _, cmd := range []string{"xdg-open", "open", "start"} {
+		if err := exec.Command(cmd, url).Start(); err == nil {
+			return nil
+		}
+	}
+	return nil
 }
 
 // BuildQuery constructs a Gmail search query matching any of the given sender addresses.
