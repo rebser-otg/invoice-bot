@@ -49,6 +49,9 @@ func TestLoad_MissingConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing config.yaml")
 	}
+	if !strings.Contains(err.Error(), "config.yaml") {
+		t.Errorf("error should mention config.yaml, got: %v", err)
+	}
 }
 
 func TestLoad_MissingSenders(t *testing.T) {
@@ -57,6 +60,9 @@ func TestLoad_MissingSenders(t *testing.T) {
 	_, err := config.Load(dir)
 	if err == nil {
 		t.Fatal("expected error for missing senders.txt")
+	}
+	if !strings.Contains(err.Error(), "senders.txt") {
+		t.Errorf("error should mention senders.txt, got: %v", err)
 	}
 }
 
@@ -67,6 +73,9 @@ func TestLoad_MissingMessage(t *testing.T) {
 	_, err := config.Load(dir)
 	if err == nil {
 		t.Fatal("expected error for missing message.txt")
+	}
+	if !strings.Contains(err.Error(), "message.txt") {
+		t.Errorf("error should mention message.txt, got: %v", err)
 	}
 }
 
