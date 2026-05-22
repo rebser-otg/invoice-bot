@@ -1,0 +1,100 @@
+package gmail
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	gmailv1 "google.golang.org/api/gmail/v1"
+	"google.golang.org/api/option"
+)
+
+var scopes = []string{
+	gmailv1.GmailReadonlyScope,
+	gmailv1.GmailSendScope,
+}
+
+// Client wraps the Gmail API service.
+type Client struct {
+	svc *gmailv1.Service
+}
+
+// NewClient loads OAuth2 credentials and returns an authenticated Client.
+// If token.json is missing or expired, it prints a URL for the consent flow,
+// reads the auth code from stdin, and saves the resulting token to tokenPath.
+func NewClient(credentialsPath, tokenPath string) (*Client, error) {
+	data, err := os.ReadFile(credentialsPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf(
+				"credentials.json not found at %q\n"+
+					"Download it from https://console.cloud.google.com/apis/credentials\n"+
+					"(Create OAuth 2.0 Client ID → Desktop App, then download JSON)",
+				credentialsPath,
+			)
+		}
+		return nil, fmt.Errorf("reading credentials: %w", err)
+	}
+
+	oauthCfg, err := google.ConfigFromJSON(data, scopes...)
+	if err != nil {
+		return nil, fmt.Errorf("parsing credentials: %w", err)
+	}
+
+	tok, err := loadToken(tokenPath)
+	if err != nil {
+		tok, err = runBrowserFlow(oauthCfg)
+		if err != nil {
+			return nil, fmt.Errorf("OAuth flow: %w", err)
+		}
+		if err := saveToken(tokenPath, tok); err != nil {
+			return nil, fmt.Errorf("saving token: %w", err)
+		}
+	}
+
+	httpClient := oauthCfg.Client(context.Background(), tok)
+	svc, err := gmailv1.NewService(context.Background(), option.WithHTTPClient(httpClient))
+	if err != nil {
+		return nil, fmt.Errorf("creating Gmail service: %w", err)
+	}
+	return &Client{svc: svc}, nil
+}
+
+func loadToken(path string) (*oauth2.Token, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var tok oauth2.Token
+	if err := json.Unmarshal(data, &tok); err != nil {
+		return nil, err
+	}
+	return &tok, nil
+}
+
+func saveToken(path string, tok *oauth2.Token) error {
+	data, err := json.Marshal(tok)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+func runBrowserFlow(cfg *oauth2.Config) (*oauth2.Token, error) {
+	cfg.RedirectURL = "urn:ietf:wg:oauth:2.0:oob"
+	authURL := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	fmt.Printf("Open this URL in your browser to authorize invoice-bot:\n\n%s\n\nEnter the authorization code: ", authURL)
+	var code string
+	if _, err := fmt.Scan(&code); err != nil {
+		return nil, fmt.Errorf("reading auth code: %w", err)
+	}
+	tok, err := cfg.Exchange(context.Background(), code)
+	if err != nil {
+		return nil, fmt.Errorf("exchanging code: %w", err)
+	}
+	return tok, nil
+}
