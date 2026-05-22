@@ -2,6 +2,7 @@ package forwarder
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/rebser-otg/invoice-bot/config"
 	"github.com/rebser-otg/invoice-bot/gmail"
@@ -41,20 +42,20 @@ func Run(cfg *config.Config, mem *memory.Memory, client MailClient) (Result, err
 
 		raw, err := client.FetchRaw(id)
 		if err != nil {
-			fmt.Printf("  [error] fetching %s: %v\n", id, err)
+			fmt.Fprintf(os.Stderr, "  [error] fetching %s: %v\n", id, err)
 			res.Failed++
 			continue
 		}
 
 		fwd, err := gmail.BuildForward(raw, cfg.ForwardTo, cfg.MessageText)
 		if err != nil {
-			fmt.Printf("  [error] building forward for %s: %v\n", id, err)
+			fmt.Fprintf(os.Stderr, "  [error] building forward for %s: %v\n", id, err)
 			res.Failed++
 			continue
 		}
 
 		if err := client.Send(fwd); err != nil {
-			fmt.Printf("  [error] sending %s: %v\n", id, err)
+			fmt.Fprintf(os.Stderr, "  [error] sending %s: %v\n", id, err)
 			res.Failed++
 			continue
 		}
