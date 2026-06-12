@@ -12,16 +12,20 @@ import (
 
 // Config holds all loaded configuration.
 type Config struct {
-	ForwardTo   string
-	Senders     []string
-	MessageText string
+	APIBaseURL string
+	APIToken   string
+	Senders    []string
 }
 
 type yamlConfig struct {
-	ForwardTo string `yaml:"forward_to"`
+	APIBaseURL string `yaml:"api_base_url"`
+	APIToken   string `yaml:"api_token"`
 }
 
-// Load reads config.yaml, senders.txt, and message.txt from dir.
+// Load reads config.yaml and senders.txt from dir. config.yaml holds the
+// Office-Hub base URL + the Personal API Token (generate it under Profil →
+// Sicherheit → API-Token). config.yaml is gitignored, so the token stays out
+// of version control.
 func Load(dir string) (*Config, error) {
 	yc, err := loadYAML(filepath.Join(dir, "config.yaml"))
 	if err != nil {
@@ -31,20 +35,19 @@ func Load(dir string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("senders.txt: %w", err)
 	}
-	if yc.ForwardTo == "" {
-		return nil, fmt.Errorf("config.yaml: forward_to is required")
+	if yc.APIBaseURL == "" {
+		return nil, fmt.Errorf("config.yaml: api_base_url is required")
+	}
+	if yc.APIToken == "" {
+		return nil, fmt.Errorf("config.yaml: api_token is required")
 	}
 	if len(senders) == 0 {
 		return nil, fmt.Errorf("senders.txt: at least one sender address is required")
 	}
-	msg, err := os.ReadFile(filepath.Join(dir, "message.txt"))
-	if err != nil {
-		return nil, fmt.Errorf("message.txt: %w", err)
-	}
 	return &Config{
-		ForwardTo:   yc.ForwardTo,
-		Senders:     senders,
-		MessageText: string(msg),
+		APIBaseURL: strings.TrimRight(yc.APIBaseURL, "/"),
+		APIToken:   yc.APIToken,
+		Senders:    senders,
 	}, nil
 }
 

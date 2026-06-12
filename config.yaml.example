@@ -1,1 +1,4 @@
-forward_to: accounting@example.com
+# Copy to config.yaml (gitignored) and fill in.
+# Generate the API token in Office Hub under Profil → Sicherheit → API-Token.
+api_base_url: https://offices.onetech.group
+api_token: otg_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

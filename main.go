@@ -8,6 +8,7 @@ import (
 	"github.com/rebser-otg/invoice-bot/forwarder"
 	"github.com/rebser-otg/invoice-bot/gmail"
 	"github.com/rebser-otg/invoice-bot/memory"
+	"github.com/rebser-otg/invoice-bot/uploader"
 )
 
 func main() {
@@ -29,25 +30,27 @@ func main() {
 		fatalf("connecting to Gmail:\n%v", err)
 	}
 
-	result, runErr := forwarder.Run(cfg, mem, client)
+	up := uploader.New(cfg.APIBaseURL, cfg.APIToken)
+
+	result, runErr := forwarder.Run(cfg, mem, client, up)
 
 	// Save memory before checking runErr: if Run failed mid-loop some messages
-	// may already have been forwarded and added to mem — persisting them prevents
-	// duplicate sends on the next run.
+	// may already have been handed in and added to mem — persisting them prevents
+	// re-processing on the next run.
 	if err := mem.Save(memPath); err != nil {
 		fatalf("saving memory: %v", err)
 	}
 
 	if runErr != nil {
-		fatalf("running forwarder: %v", runErr)
+		fatalf("running invoice-bot: %v", runErr)
 	}
 
-	if result.Forwarded == 0 && result.Failed == 0 {
+	if result.Uploaded == 0 && result.Failed == 0 && result.Skipped == 0 {
 		fmt.Println("No new invoices found.")
 		return
 	}
-	fmt.Printf("Forwarded %d new invoice(s). %d failed. %d already seen.\n",
-		result.Forwarded, result.Failed, result.AlreadySeen)
+	fmt.Printf("Uploaded %d new invoice(s). %d skipped (no attachment). %d failed. %d already seen.\n",
+		result.Uploaded, result.Skipped, result.Failed, result.AlreadySeen)
 	if result.Failed > 0 {
 		os.Exit(1)
 	}
